@@ -116,4 +116,18 @@ void main() {
       );
     });
   });
+
+  group('fetchShowUpdates', () {
+    test('chiama /updates/shows con since e converte la mappa', () async {
+      late Uri calledUri;
+      final client = clientReturning('{"1316": 1763000000, "1": 1700000000}',
+          onRequest: (r) => calledUri = r.url);
+
+      final updates = await client.fetchShowUpdates(since: 'day');
+
+      expect(calledUri.path, '/updates/shows');
+      expect(calledUri.queryParameters['since'], 'day');
+      expect(updates, {1316: 1763000000, 1: 1700000000});
+    });
+  });
 }

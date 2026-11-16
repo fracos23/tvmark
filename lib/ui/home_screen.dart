@@ -2,14 +2,18 @@ import 'package:flutter/material.dart';
 
 import '../data/app_database.dart';
 import '../data/show_repository.dart';
-import 'formatters.dart';
+import '../data/tvmaze_client.dart';
+import '../domain/enums.dart';
+import '../domain/home_sections.dart';
+import 'pages/my_shows_page.dart';
+import 'pages/to_watch_page.dart';
+import 'pages/upcoming_page.dart';
 import 'search_screen.dart';
 import 'show_detail_screen.dart';
-import 'widgets/poster.dart';
 
-/// Home provvisoria: elenco delle serie seguite con il numero di episodi
-/// usciti e non ancora visti. Le sezioni "Usciti / In arrivo / In pausa"
-/// arrivano nello sprint successivo, insieme al refresh.
+/// Schermata principale: tre pagine navigabili dalla bottom bar.
+/// Gestisce anche il refresh da TVmaze: all'apertura, al ritorno in
+/// primo piano e con il trascina-per-aggiornare in ogni pagina.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.repository});
 
@@ -20,30 +24,126 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  static const _titles = ['Da vedere', 'In arrivo', 'Le mie serie'];
+
   late final Stream<List<TvShow>> _shows = widget.repository.watchShows();
-  late final Stream<Map<int, int>> _counts =
-      widget.repository.watchAiredToWatchCounts();
+  late final Stream<List<ShowEpisode>> _episodes =
+      widget.repository.watchRelevantEpisodes();
+
+  /// Ritorno in primo piano (app riaperta dal multitasking):
+  /// iOS non riavvia l'app, quindi initState non basterebbe.
+  late final AppLifecycleListener _lifecycle;
+
+  int _tab = 0;
+  bool _refreshing = false;
+
+  ShowRepository get _repo => widget.repository;
+
+  @override
+  void initState() {
+    super.initState();
+    _lifecycle = AppLifecycleListener(onResume: _refresh);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
+  }
+
+  @override
+  void dispose() {
+    _lifecycle.dispose();
+    super.dispose();
+  }
+
+  Future<void> _refresh({bool force = false}) async {
+    if (mounted) setState(() => _refreshing = true);
+    try {
+      await _repo.refresh(force: force);
+    } on TvmazeException {
+      // Automatico: silenzioso (es. offline). Manuale: avvisiamo.
+      if (force && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'Aggiornamento non riuscito: mostro gli ultimi dati salvati.'),
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
+  }
+
+  Future<void> _forceRefresh() => _refresh(force: true);
 
   void _openSearch() => Navigator.push(
         context,
-        MaterialPageRoute(
-          builder: (_) => SearchScreen(repository: widget.repository),
-        ),
+        MaterialPageRoute(builder: (_) => SearchScreen(repository: _repo)),
       );
 
   void _openShow(TvShow show) => Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) =>
-              ShowDetailScreen(repository: widget.repository, show: show),
+          builder: (_) => ShowDetailScreen(repository: _repo, show: show),
         ),
       );
 
   @override
   Widget build(BuildContext context) {
+    return StreamBuilder<List<TvShow>>(
+      stream: _shows,
+      builder: (context, showsSnap) {
+        return StreamBuilder<List<ShowEpisode>>(
+          stream: _episodes,
+          builder: (context, epSnap) {
+            final shows = showsSnap.data;
+            final data = shows == null
+                ? null
+                : buildHomeData(
+                    shows: shows,
+                    episodes: epSnap.data ?? const [],
+                    now: DateTime.now(),
+                  );
+            return _buildScaffold(shows, data);
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildScaffold(List<TvShow>? shows, HomeData? data) {
+    final Widget body;
+    if (shows == null || data == null) {
+      body = const Center(child: CircularProgressIndicator());
+    } else if (shows.isEmpty) {
+      body = _EmptyState(onAdd: _openSearch);
+    } else {
+      // IndexedStack: le tre pagine restano "vive", quindi cambiando tab
+      // non si perde la posizione di scorrimento.
+      body = IndexedStack(
+        index: _tab,
+        children: [
+          ToWatchPage(
+            data: data,
+            onRefresh: _forceRefresh,
+            onOpenShow: _openShow,
+            onMarkWatched: (ep) =>
+                _repo.markStatus(ep.id, WatchStatus.watched),
+          ),
+          UpcomingPage(
+            data: data,
+            onRefresh: _forceRefresh,
+            onOpenShow: _openShow,
+          ),
+          MyShowsPage(
+            data: data,
+            onRefresh: _forceRefresh,
+            onOpenShow: _openShow,
+          ),
+        ],
+      );
+    }
+
+    final toWatchTotal = data?.totalToWatch ?? 0;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('TVMark'),
+        title: Text(_titles[_tab]),
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
@@ -51,62 +151,66 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: _openSearch,
           ),
         ],
+        bottom: _refreshing
+            ? const PreferredSize(
+                preferredSize: Size.fromHeight(2),
+                child: LinearProgressIndicator(minHeight: 2),
+              )
+            : null,
       ),
-      body: StreamBuilder<List<TvShow>>(
-        stream: _shows,
-        builder: (context, showsSnap) {
-          final shows = showsSnap.data;
-          if (shows == null) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (shows.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('Nessuna serie seguita'),
-                  const SizedBox(height: 12),
-                  FilledButton.icon(
-                    onPressed: _openSearch,
-                    icon: const Icon(Icons.add),
-                    label: const Text('Aggiungi una serie'),
-                  ),
-                ],
-              ),
-            );
-          }
+      body: body,
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _tab,
+        onDestinationSelected: (i) => setState(() => _tab = i),
+        destinations: [
+          NavigationDestination(
+            icon: Badge.count(
+              count: toWatchTotal,
+              isLabelVisible: toWatchTotal > 0,
+              child: const Icon(Icons.play_circle_outline),
+            ),
+            selectedIcon: Badge.count(
+              count: toWatchTotal,
+              isLabelVisible: toWatchTotal > 0,
+              child: const Icon(Icons.play_circle),
+            ),
+            label: 'Da vedere',
+          ),
+          const NavigationDestination(
+            icon: Icon(Icons.event_outlined),
+            selectedIcon: Icon(Icons.event),
+            label: 'In arrivo',
+          ),
+          const NavigationDestination(
+            icon: Icon(Icons.video_library_outlined),
+            selectedIcon: Icon(Icons.video_library),
+            label: 'Le mie serie',
+          ),
+        ],
+      ),
+    );
+  }
+}
 
-          return StreamBuilder<Map<int, int>>(
-            stream: _counts,
-            builder: (context, countsSnap) {
-              final counts = countsSnap.data ?? const {};
-              return ListView.separated(
-                itemCount: shows.length,
-                separatorBuilder: (_, __) => const Divider(height: 1),
-                itemBuilder: (context, i) {
-                  final show = shows[i];
-                  final toWatch = counts[show.id] ?? 0;
-                  return ListTile(
-                    leading: Poster(url: show.imageUrl),
-                    title: Text(show.name),
-                    subtitle: Text([
-                      if (show.network != null) show.network!,
-                      show.status.label,
-                    ].join(' · ')),
-                    trailing: toWatch > 0
-                        ? Badge.count(
-                            count: toWatch,
-                            backgroundColor:
-                                Theme.of(context).colorScheme.primary,
-                          )
-                        : null,
-                    onTap: () => _openShow(show),
-                  );
-                },
-              );
-            },
-          );
-        },
+class _EmptyState extends StatelessWidget {
+  const _EmptyState({required this.onAdd});
+
+  final VoidCallback onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('Nessuna serie seguita'),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: onAdd,
+            icon: const Icon(Icons.add),
+            label: const Text('Aggiungi una serie'),
+          ),
+        ],
       ),
     );
   }

@@ -126,4 +126,65 @@ void main() {
     final counts = await db.watchAiredToWatchCounts().first;
     expect(counts, {1: 1});
   });
+
+  group('syncEpisodes', () {
+    EpisodesCompanion apiEp(int id, int number, DateTime? air,
+            {String? name}) =>
+        EpisodesCompanion.insert(
+          id: Value(id),
+          showId: 1,
+          season: 1,
+          number: Value(number),
+          name: name ?? 'E$number',
+          airstamp: Value(air),
+        );
+
+    setUp(() => db.upsertShow(TvShowsCompanion.insert(
+          id: const Value(1),
+          name: 'Serie',
+          status: ShowStatus.running,
+        )));
+
+    test('aggiorna date e titoli, mantiene lo stato, aggiunge e rimuove',
+        () async {
+      await db.syncEpisodes(1, [
+        apiEp(1, 1, DateTime.utc(2026, 11, 1)),
+        apiEp(2, 2, DateTime.utc(2026, 11, 8)),
+        apiEp(3, 3, null),
+      ]);
+      await db.markStatus(1, WatchStatus.watched);
+
+      // Secondo download: ep1 rinominato, ep2 spostato, ep3 ora ha data,
+      // ep4 nuovo... ep2 resta, ep3 resta. Poi verifichiamo la rimozione.
+      await db.syncEpisodes(1, [
+        apiEp(1, 1, DateTime.utc(2026, 11, 1), name: 'Pilot'),
+        apiEp(2, 2, DateTime.utc(2026, 11, 15)),
+        apiEp(3, 3, DateTime.utc(2026, 12, 1)),
+        apiEp(4, 4, null),
+      ]);
+
+      var eps = {for (final e in await db.watchEpisodesOf(1).first) e.id: e};
+      expect(eps.keys, [1, 2, 3, 4]);
+      expect(eps[1]!.name, 'Pilot');
+      expect(eps[1]!.watchStatus, WatchStatus.watched); // stato intatto
+      expect(eps[2]!.airstamp!.toUtc(), DateTime.utc(2026, 11, 15));
+      expect(eps[3]!.airstamp!.toUtc(), DateTime.utc(2026, 12, 1));
+      expect(eps[4]!.watchStatus, WatchStatus.toWatch);
+
+      // Terzo download: ep4 sparito da TVmaze.
+      await db.syncEpisodes(1, [
+        apiEp(1, 1, DateTime.utc(2026, 11, 1), name: 'Pilot'),
+        apiEp(2, 2, DateTime.utc(2026, 11, 15)),
+        apiEp(3, 3, DateTime.utc(2026, 12, 1)),
+      ]);
+      eps = {for (final e in await db.watchEpisodesOf(1).first) e.id: e};
+      expect(eps.keys, [1, 2, 3]);
+    });
+
+    test('lista vuota dall\'API: non cancella nulla', () async {
+      await db.syncEpisodes(1, [apiEp(1, 1, null)]);
+      await db.syncEpisodes(1, const []);
+      expect(await db.watchEpisodesOf(1).first, hasLength(1));
+    });
+  });
 }

@@ -78,6 +78,22 @@ class TvmazeClient {
     return parseShowWithEpisodes(json);
   }
 
+  /// GET /updates/shows?since=day|week|month
+  /// Restituisce id serie -> timestamp (secondi epoch) dell'ultima modifica.
+  /// TVmaze considera "modificata" una serie anche quando cambia
+  /// uno dei suoi episodi (es. una data spostata).
+  Future<Map<int, int>> fetchShowUpdates({required String since}) async {
+    final json =
+        await _get('/updates/shows', {'since': since}) as Map<String, dynamic>;
+    final result = <int, int>{};
+    for (final entry in json.entries) {
+      final id = int.tryParse(entry.key);
+      final updated = entry.value;
+      if (id != null && updated is int) result[id] = updated;
+    }
+    return result;
+  }
+
   void close() => _client.close();
 
   Future<dynamic> _get(String path, Map<String, String> params) async {

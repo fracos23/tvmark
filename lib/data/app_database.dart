@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 
 import '../domain/enums.dart';
+import '../domain/home_sections.dart';
 import 'tables.dart';
 
 part 'app_database.g.dart';
@@ -30,6 +31,8 @@ class AppDatabase extends _$AppDatabase {
         ..orderBy([(s) => OrderingTerm.asc(s.name)]))
       .watch();
 
+  Future<List<TvShow>> getShows() => select(tvShows).get();
+
   Future<void> upsertShow(TvShowsCompanion show) =>
       into(tvShows).insertOnConflictUpdate(show);
 
@@ -52,6 +55,52 @@ class AppDatabase extends _$AppDatabase {
   /// L'aggiornamento delle date sugli esistenti arriva con lo sprint del refresh.
   Future<void> insertNewEpisodes(List<EpisodesCompanion> list) =>
       batch((b) => b.insertAll(episodes, list, mode: InsertMode.insertOrIgnore));
+
+  /// Allinea gli episodi di una serie a quelli appena scaricati da TVmaze:
+  /// - nuovi -> inseriti come "da vedere";
+  /// - esistenti -> aggiornati SOLO nei campi dell'API (titolo, data...),
+  ///   lo stato di visione dell'utente non viene toccato;
+  /// - non più presenti su TVmaze -> eliminati.
+  /// Tutto in un'unica batch, quindi atomico.
+  Future<void> syncEpisodes(int showId, List<EpisodesCompanion> fromApi) {
+    // Protezione: se l'API restituisce zero episodi (anomalia), non
+    // cancelliamo tutto quello che c'è in locale.
+    if (fromApi.isEmpty) return Future.value();
+
+    final ids = fromApi.map((e) => e.id.value).toList();
+    return batch((b) {
+      for (final ep in fromApi) {
+        b.insert(
+          episodes,
+          ep,
+          onConflict: DoUpdate((_) => EpisodesCompanion(
+                season: ep.season,
+                number: ep.number,
+                name: ep.name,
+                airstamp: ep.airstamp,
+                runtime: ep.runtime,
+              )),
+        );
+      }
+      b.deleteWhere(
+          episodes, (e) => e.showId.equals(showId) & e.id.isNotIn(ids));
+    });
+  }
+
+  /// Episodi che servono alla home, con la loro serie:
+  /// tutti quelli "da vedere" + tutti quelli futuri.
+  /// Esclude il grosso dello storico (episodi passati già visti/saltati).
+  Stream<List<ShowEpisode>> watchRelevantEpisodes() {
+    final query = select(episodes).join([
+      innerJoin(tvShows, tvShows.id.equalsExp(episodes.showId)),
+    ])
+      ..where(episodes.watchStatus.equalsValue(WatchStatus.toWatch) |
+          episodes.airstamp.isBiggerThan(currentDateAndTime));
+    return query.watch().map((rows) => [
+          for (final r in rows)
+            ShowEpisode(r.readTable(tvShows), r.readTable(episodes)),
+        ]);
+  }
 
   Future<int> markStatus(int episodeId, WatchStatus status) =>
       (update(episodes)..where((e) => e.id.equals(episodeId))).write(
