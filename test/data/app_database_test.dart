@@ -15,7 +15,7 @@ void main() {
 
   Future<void> seed() async {
     await db.upsertShow(TvShowsCompanion.insert(
-      id: 1,
+      id: const Value(1),
       name: 'Chicago Fire',
       status: ShowStatus.running,
     ));
