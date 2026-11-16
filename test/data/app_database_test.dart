@@ -99,4 +99,31 @@ void main() {
     await db.setMeta('lastRefresh', '2026-11-16T16:00:00Z');
     expect(await db.getMeta('lastRefresh'), '2026-11-16T16:00:00Z');
   });
+
+  test('conteggio episodi usciti da vedere, per serie', () async {
+    await db.upsertShow(TvShowsCompanion.insert(
+      id: const Value(1),
+      name: 'Serie',
+      status: ShowStatus.running,
+    ));
+    final now = DateTime.now();
+    EpisodesCompanion ep(int id, DateTime? air) => EpisodesCompanion.insert(
+          id: Value(id),
+          showId: 1,
+          season: 1,
+          number: Value(id),
+          name: 'E$id',
+          airstamp: Value(air),
+        );
+    await db.insertNewEpisodes([
+      ep(1, now.subtract(const Duration(days: 2))), // uscito, da vedere
+      ep(2, now.subtract(const Duration(days: 1))), // uscito, poi visto
+      ep(3, now.add(const Duration(days: 7))), // futuro
+      ep(4, null), // senza data
+    ]);
+    await db.markStatus(2, WatchStatus.watched);
+
+    final counts = await db.watchAiredToWatchCounts().first;
+    expect(counts, {1: 1});
+  });
 }

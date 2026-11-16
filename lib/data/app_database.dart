@@ -94,6 +94,21 @@ class AppDatabase extends _$AppDatabase {
         watchedAt: Value(DateTime.now()),
       ));
 
+  /// Per ogni serie: quanti episodi già usciti sono ancora "da vedere".
+  /// Il confronto con l'ora attuale è fatto in SQL (currentDateAndTime).
+  /// Gli episodi senza data non contano (NULL non supera il confronto).
+  Stream<Map<int, int>> watchAiredToWatchCounts() {
+    final count = episodes.id.count();
+    final query = selectOnly(episodes)
+      ..addColumns([episodes.showId, count])
+      ..where(episodes.watchStatus.equalsValue(WatchStatus.toWatch) &
+          episodes.airstamp.isSmallerOrEqual(currentDateAndTime))
+      ..groupBy([episodes.showId]);
+    return query.watch().map((rows) => {
+          for (final r in rows) r.read(episodes.showId)!: r.read(count) ?? 0,
+        });
+  }
+
   // ---------------- Meta ----------------
 
   Future<String?> getMeta(String key) async {

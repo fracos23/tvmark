@@ -1,13 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
+import 'data/app_database.dart';
+import 'data/show_repository.dart';
+import 'data/tvmaze_client.dart';
 import 'ui/home_screen.dart';
 
-void main() {
-  runApp(const TvMarkApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Carica nomi di giorni e mesi in italiano per DateFormat.
+  await initializeDateFormatting('it_IT');
+
+  final repository = ShowRepository(db: AppDatabase(), api: TvmazeClient());
+  runApp(TvMarkApp(repository: repository));
 }
 
 class TvMarkApp extends StatelessWidget {
-  const TvMarkApp({super.key});
+  const TvMarkApp({super.key, required this.repository});
+
+  final ShowRepository repository;
 
   @override
   Widget build(BuildContext context) {
@@ -23,7 +34,7 @@ class TvMarkApp extends StatelessWidget {
           brightness: Brightness.dark,
         ),
       ),
-      home: const HomeScreen(),
+      home: HomeScreen(repository: repository),
     );
   }
 }
