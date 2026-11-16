@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Titoletto colorato che separa i gruppi di una lista.
 class SectionHeader extends StatelessWidget {

@@ -39,6 +39,7 @@ dependencies:
   http: ^1.6.0
   intl: ^0.20.3
 
+  material_ui: ^1.11.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

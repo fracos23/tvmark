@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Locandina piccola per le liste, con segnaposto se manca l'immagine
 /// o se il caricamento fallisce (es. offline).
