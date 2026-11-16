@@ -46,7 +46,7 @@ class EpisodeTile extends StatelessWidget {
 
     final grey = Theme.of(context).disabledColor;
     final (IconData icon, Color? color) = switch (episode.watchStatus) {
-      WatchStatus.watched => (Icons.check_circle, Colors.green),
+      WatchStatus.watched => (Icons.check_circle, Theme.of(context).colorScheme.primary),
       WatchStatus.skipped => (Icons.do_not_disturb_on_outlined, grey),
       WatchStatus.toWatch =>
         isAired ? (Icons.radio_button_unchecked, null) : (Icons.schedule, grey),

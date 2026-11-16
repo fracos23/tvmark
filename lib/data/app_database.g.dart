@@ -57,6 +57,16 @@ class $TvShowsTable extends TvShows with TableInfo<$TvShowsTable, TvShow> {
         type: DriftSqlType.string,
         requiredDuringInsert: true,
       ).withConverter<ShowStatus>($TvShowsTable.$converterstatus);
+  @override
+  late final GeneratedColumnWithTypeConverter<ShowSource, String> source =
+      GeneratedColumn<String>(
+        'source',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+        defaultValue: Constant(ShowSource.tvmaze.name),
+      ).withConverter<ShowSource>($TvShowsTable.$convertersource);
   static const VerificationMeta _tvmazeUpdatedMeta = const VerificationMeta(
     'tvmazeUpdated',
   );
@@ -98,6 +108,7 @@ class $TvShowsTable extends TvShows with TableInfo<$TvShowsTable, TvShow> {
     imageUrl,
     network,
     status,
+    source,
     tvmazeUpdated,
     lastSyncedAt,
     addedAt,
@@ -192,6 +203,12 @@ class $TvShowsTable extends TvShows with TableInfo<$TvShowsTable, TvShow> {
           data['${effectivePrefix}status'],
         )!,
       ),
+      source: $TvShowsTable.$convertersource.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}source'],
+        )!,
+      ),
       tvmazeUpdated: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}tvmaze_updated'],
@@ -214,6 +231,8 @@ class $TvShowsTable extends TvShows with TableInfo<$TvShowsTable, TvShow> {
 
   static JsonTypeConverter2<ShowStatus, String, String> $converterstatus =
       const EnumNameConverter<ShowStatus>(ShowStatus.values);
+  static JsonTypeConverter2<ShowSource, String, String> $convertersource =
+      const EnumNameConverter<ShowSource>(ShowSource.values);
 }
 
 class TvShow extends DataClass implements Insertable<TvShow> {
@@ -222,6 +241,10 @@ class TvShow extends DataClass implements Insertable<TvShow> {
   final String? imageUrl;
   final String? network;
   final ShowStatus status;
+
+  /// Fonte dei dati (aggiunta nello schema v2). Le serie già presenti
+  /// prima della migrazione ricevono il default "tvmaze".
+  final ShowSource source;
 
   /// Timestamp "updated" di TVmaze (secondi epoch): serve a capire,
   /// con /updates/shows, se la serie è cambiata dall'ultimo refresh.
@@ -234,6 +257,7 @@ class TvShow extends DataClass implements Insertable<TvShow> {
     this.imageUrl,
     this.network,
     required this.status,
+    required this.source,
     this.tvmazeUpdated,
     this.lastSyncedAt,
     required this.addedAt,
@@ -252,6 +276,11 @@ class TvShow extends DataClass implements Insertable<TvShow> {
     {
       map['status'] = Variable<String>(
         $TvShowsTable.$converterstatus.toSql(status),
+      );
+    }
+    {
+      map['source'] = Variable<String>(
+        $TvShowsTable.$convertersource.toSql(source),
       );
     }
     if (!nullToAbsent || tvmazeUpdated != null) {
@@ -275,6 +304,7 @@ class TvShow extends DataClass implements Insertable<TvShow> {
           ? const Value.absent()
           : Value(network),
       status: Value(status),
+      source: Value(source),
       tvmazeUpdated: tvmazeUpdated == null && nullToAbsent
           ? const Value.absent()
           : Value(tvmazeUpdated),
@@ -298,6 +328,9 @@ class TvShow extends DataClass implements Insertable<TvShow> {
       status: $TvShowsTable.$converterstatus.fromJson(
         serializer.fromJson<String>(json['status']),
       ),
+      source: $TvShowsTable.$convertersource.fromJson(
+        serializer.fromJson<String>(json['source']),
+      ),
       tvmazeUpdated: serializer.fromJson<int?>(json['tvmazeUpdated']),
       lastSyncedAt: serializer.fromJson<DateTime?>(json['lastSyncedAt']),
       addedAt: serializer.fromJson<DateTime>(json['addedAt']),
@@ -314,6 +347,9 @@ class TvShow extends DataClass implements Insertable<TvShow> {
       'status': serializer.toJson<String>(
         $TvShowsTable.$converterstatus.toJson(status),
       ),
+      'source': serializer.toJson<String>(
+        $TvShowsTable.$convertersource.toJson(source),
+      ),
       'tvmazeUpdated': serializer.toJson<int?>(tvmazeUpdated),
       'lastSyncedAt': serializer.toJson<DateTime?>(lastSyncedAt),
       'addedAt': serializer.toJson<DateTime>(addedAt),
@@ -326,6 +362,7 @@ class TvShow extends DataClass implements Insertable<TvShow> {
     Value<String?> imageUrl = const Value.absent(),
     Value<String?> network = const Value.absent(),
     ShowStatus? status,
+    ShowSource? source,
     Value<int?> tvmazeUpdated = const Value.absent(),
     Value<DateTime?> lastSyncedAt = const Value.absent(),
     DateTime? addedAt,
@@ -335,6 +372,7 @@ class TvShow extends DataClass implements Insertable<TvShow> {
     imageUrl: imageUrl.present ? imageUrl.value : this.imageUrl,
     network: network.present ? network.value : this.network,
     status: status ?? this.status,
+    source: source ?? this.source,
     tvmazeUpdated: tvmazeUpdated.present
         ? tvmazeUpdated.value
         : this.tvmazeUpdated,
@@ -348,6 +386,7 @@ class TvShow extends DataClass implements Insertable<TvShow> {
       imageUrl: data.imageUrl.present ? data.imageUrl.value : this.imageUrl,
       network: data.network.present ? data.network.value : this.network,
       status: data.status.present ? data.status.value : this.status,
+      source: data.source.present ? data.source.value : this.source,
       tvmazeUpdated: data.tvmazeUpdated.present
           ? data.tvmazeUpdated.value
           : this.tvmazeUpdated,
@@ -366,6 +405,7 @@ class TvShow extends DataClass implements Insertable<TvShow> {
           ..write('imageUrl: $imageUrl, ')
           ..write('network: $network, ')
           ..write('status: $status, ')
+          ..write('source: $source, ')
           ..write('tvmazeUpdated: $tvmazeUpdated, ')
           ..write('lastSyncedAt: $lastSyncedAt, ')
           ..write('addedAt: $addedAt')
@@ -380,6 +420,7 @@ class TvShow extends DataClass implements Insertable<TvShow> {
     imageUrl,
     network,
     status,
+    source,
     tvmazeUpdated,
     lastSyncedAt,
     addedAt,
@@ -393,6 +434,7 @@ class TvShow extends DataClass implements Insertable<TvShow> {
           other.imageUrl == this.imageUrl &&
           other.network == this.network &&
           other.status == this.status &&
+          other.source == this.source &&
           other.tvmazeUpdated == this.tvmazeUpdated &&
           other.lastSyncedAt == this.lastSyncedAt &&
           other.addedAt == this.addedAt);
@@ -404,6 +446,7 @@ class TvShowsCompanion extends UpdateCompanion<TvShow> {
   final Value<String?> imageUrl;
   final Value<String?> network;
   final Value<ShowStatus> status;
+  final Value<ShowSource> source;
   final Value<int?> tvmazeUpdated;
   final Value<DateTime?> lastSyncedAt;
   final Value<DateTime> addedAt;
@@ -413,6 +456,7 @@ class TvShowsCompanion extends UpdateCompanion<TvShow> {
     this.imageUrl = const Value.absent(),
     this.network = const Value.absent(),
     this.status = const Value.absent(),
+    this.source = const Value.absent(),
     this.tvmazeUpdated = const Value.absent(),
     this.lastSyncedAt = const Value.absent(),
     this.addedAt = const Value.absent(),
@@ -423,6 +467,7 @@ class TvShowsCompanion extends UpdateCompanion<TvShow> {
     this.imageUrl = const Value.absent(),
     this.network = const Value.absent(),
     required ShowStatus status,
+    this.source = const Value.absent(),
     this.tvmazeUpdated = const Value.absent(),
     this.lastSyncedAt = const Value.absent(),
     this.addedAt = const Value.absent(),
@@ -434,6 +479,7 @@ class TvShowsCompanion extends UpdateCompanion<TvShow> {
     Expression<String>? imageUrl,
     Expression<String>? network,
     Expression<String>? status,
+    Expression<String>? source,
     Expression<int>? tvmazeUpdated,
     Expression<DateTime>? lastSyncedAt,
     Expression<DateTime>? addedAt,
@@ -444,6 +490,7 @@ class TvShowsCompanion extends UpdateCompanion<TvShow> {
       if (imageUrl != null) 'image_url': imageUrl,
       if (network != null) 'network': network,
       if (status != null) 'status': status,
+      if (source != null) 'source': source,
       if (tvmazeUpdated != null) 'tvmaze_updated': tvmazeUpdated,
       if (lastSyncedAt != null) 'last_synced_at': lastSyncedAt,
       if (addedAt != null) 'added_at': addedAt,
@@ -456,6 +503,7 @@ class TvShowsCompanion extends UpdateCompanion<TvShow> {
     Value<String?>? imageUrl,
     Value<String?>? network,
     Value<ShowStatus>? status,
+    Value<ShowSource>? source,
     Value<int?>? tvmazeUpdated,
     Value<DateTime?>? lastSyncedAt,
     Value<DateTime>? addedAt,
@@ -466,6 +514,7 @@ class TvShowsCompanion extends UpdateCompanion<TvShow> {
       imageUrl: imageUrl ?? this.imageUrl,
       network: network ?? this.network,
       status: status ?? this.status,
+      source: source ?? this.source,
       tvmazeUpdated: tvmazeUpdated ?? this.tvmazeUpdated,
       lastSyncedAt: lastSyncedAt ?? this.lastSyncedAt,
       addedAt: addedAt ?? this.addedAt,
@@ -492,6 +541,11 @@ class TvShowsCompanion extends UpdateCompanion<TvShow> {
         $TvShowsTable.$converterstatus.toSql(status.value),
       );
     }
+    if (source.present) {
+      map['source'] = Variable<String>(
+        $TvShowsTable.$convertersource.toSql(source.value),
+      );
+    }
     if (tvmazeUpdated.present) {
       map['tvmaze_updated'] = Variable<int>(tvmazeUpdated.value);
     }
@@ -512,6 +566,7 @@ class TvShowsCompanion extends UpdateCompanion<TvShow> {
           ..write('imageUrl: $imageUrl, ')
           ..write('network: $network, ')
           ..write('status: $status, ')
+          ..write('source: $source, ')
           ..write('tvmazeUpdated: $tvmazeUpdated, ')
           ..write('lastSyncedAt: $lastSyncedAt, ')
           ..write('addedAt: $addedAt')
@@ -1369,6 +1424,7 @@ typedef $$TvShowsTableCreateCompanionBuilder = TvShowsCompanion Function({
   Value<String?> imageUrl,
   Value<String?> network,
   required ShowStatus status,
+  Value<ShowSource> source,
   Value<int?> tvmazeUpdated,
   Value<DateTime?> lastSyncedAt,
   Value<DateTime> addedAt,
@@ -1379,6 +1435,7 @@ typedef $$TvShowsTableUpdateCompanionBuilder = TvShowsCompanion Function({
   Value<String?> imageUrl,
   Value<String?> network,
   Value<ShowStatus> status,
+  Value<ShowSource> source,
   Value<int?> tvmazeUpdated,
   Value<DateTime?> lastSyncedAt,
   Value<DateTime> addedAt,
@@ -1440,6 +1497,12 @@ class $$TvShowsTableFilterComposer
   ColumnWithTypeConverterFilters<ShowStatus, ShowStatus, String> get status =>
       $composableBuilder(
         column: $table.status,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
+
+  ColumnWithTypeConverterFilters<ShowSource, ShowSource, String> get source =>
+      $composableBuilder(
+        column: $table.source,
         builder: (column) => ColumnWithTypeConverterFilters(column),
       );
 
@@ -1518,6 +1581,11 @@ class $$TvShowsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get source => $composableBuilder(
+    column: $table.source,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get tvmazeUpdated => $composableBuilder(
     column: $table.tvmazeUpdated,
     builder: (column) => ColumnOrderings(column),
@@ -1557,6 +1625,9 @@ class $$TvShowsTableAnnotationComposer
 
   GeneratedColumnWithTypeConverter<ShowStatus, String> get status =>
       $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<ShowSource, String> get source =>
+      $composableBuilder(column: $table.source, builder: (column) => column);
 
   GeneratedColumn<int> get tvmazeUpdated => $composableBuilder(
     column: $table.tvmazeUpdated,
@@ -1630,6 +1701,7 @@ class $$TvShowsTableTableManager
                 Value<String?> imageUrl = const Value.absent(),
                 Value<String?> network = const Value.absent(),
                 Value<ShowStatus> status = const Value.absent(),
+                Value<ShowSource> source = const Value.absent(),
                 Value<int?> tvmazeUpdated = const Value.absent(),
                 Value<DateTime?> lastSyncedAt = const Value.absent(),
                 Value<DateTime> addedAt = const Value.absent(),
@@ -1639,6 +1711,7 @@ class $$TvShowsTableTableManager
                 imageUrl: imageUrl,
                 network: network,
                 status: status,
+                source: source,
                 tvmazeUpdated: tvmazeUpdated,
                 lastSyncedAt: lastSyncedAt,
                 addedAt: addedAt,
@@ -1650,6 +1723,7 @@ class $$TvShowsTableTableManager
                 Value<String?> imageUrl = const Value.absent(),
                 Value<String?> network = const Value.absent(),
                 required ShowStatus status,
+                Value<ShowSource> source = const Value.absent(),
                 Value<int?> tvmazeUpdated = const Value.absent(),
                 Value<DateTime?> lastSyncedAt = const Value.absent(),
                 Value<DateTime> addedAt = const Value.absent(),
@@ -1659,6 +1733,7 @@ class $$TvShowsTableTableManager
                 imageUrl: imageUrl,
                 network: network,
                 status: status,
+                source: source,
                 tvmazeUpdated: tvmazeUpdated,
                 lastSyncedAt: lastSyncedAt,
                 addedAt: addedAt,

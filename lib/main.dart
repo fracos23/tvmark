@@ -3,15 +3,25 @@ import 'package:intl/date_symbol_data_local.dart';
 
 import 'data/app_database.dart';
 import 'data/show_repository.dart';
+import 'data/tmdb_client.dart';
 import 'data/tvmaze_client.dart';
 import 'ui/home_screen.dart';
+import 'ui/theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Carica nomi di giorni e mesi in italiano per DateFormat.
   await initializeDateFormatting('it_IT');
 
-  final repository = ShowRepository(db: AppDatabase(), api: TvmazeClient());
+  // Chiave TMDB passata all'avvio con --dart-define-from-file=secrets.json
+  // (file escluso da git). Se manca, TMDB resta disattivato.
+  const tmdbKey = String.fromEnvironment('TMDB_KEY');
+
+  final repository = ShowRepository(
+    db: AppDatabase(),
+    api: TvmazeClient(),
+    tmdb: TmdbClient(credential: tmdbKey),
+  );
   runApp(TvMarkApp(repository: repository));
 }
 
@@ -25,15 +35,7 @@ class TvMarkApp extends StatelessWidget {
     return MaterialApp(
       title: 'TVMark',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
-      ),
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.indigo,
-          brightness: Brightness.dark,
-        ),
-      ),
+      theme: buildAppTheme(),
       home: HomeScreen(repository: repository),
     );
   }

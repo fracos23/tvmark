@@ -13,11 +13,22 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor])
       : super(executor ?? driftDatabase(name: 'tvmark'));
 
+  /// Storico versioni:
+  /// - v1: schema iniziale.
+  /// - v2: colonna tvShows.source (TVmaze / TMDB).
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
+        onCreate: (m) => m.createAll(),
+        onUpgrade: (m, from, to) async {
+          if (from < 2) {
+            // Aggiunge la colonna con il suo default: le serie esistenti
+            // diventano "tvmaze" senza perdere nulla.
+            await m.addColumn(tvShows, tvShows.source);
+          }
+        },
         beforeOpen: (details) async {
           // SQLite non applica le foreign key (e quindi il cascade) se non
           // le si attiva esplicitamente a ogni apertura.
@@ -62,7 +73,15 @@ class AppDatabase extends _$AppDatabase {
   ///   lo stato di visione dell'utente non viene toccato;
   /// - non più presenti su TVmaze -> eliminati.
   /// Tutto in un'unica batch, quindi atomico.
-  Future<void> syncEpisodes(int showId, List<EpisodesCompanion> fromApi) {
+  ///
+  /// Se [onlySeasons] è indicato, la cancellazione riguarda solo quelle
+  /// stagioni: serve quando si scaricano solo le ultime (refresh TMDB),
+  /// per non eliminare le stagioni vecchie non riscaricate.
+  Future<void> syncEpisodes(
+    int showId,
+    List<EpisodesCompanion> fromApi, {
+    Set<int>? onlySeasons,
+  }) {
     // Protezione: se l'API restituisce zero episodi (anomalia), non
     // cancelliamo tutto quello che c'è in locale.
     if (fromApi.isEmpty) return Future.value();
@@ -82,8 +101,10 @@ class AppDatabase extends _$AppDatabase {
               )),
         );
       }
-      b.deleteWhere(
-          episodes, (e) => e.showId.equals(showId) & e.id.isNotIn(ids));
+      b.deleteWhere(episodes, (e) {
+        final stale = e.showId.equals(showId) & e.id.isNotIn(ids);
+        return onlySeasons == null ? stale : stale & e.season.isIn(onlySeasons);
+      });
     });
   }
 

@@ -12,6 +12,11 @@ class TvShows extends Table {
   TextColumn get network => text().nullable()();
   TextColumn get status => textEnum<ShowStatus>()();
 
+  /// Fonte dei dati (aggiunta nello schema v2). Le serie già presenti
+  /// prima della migrazione ricevono il default "tvmaze".
+  TextColumn get source => textEnum<ShowSource>()
+      .withDefault(Constant(ShowSource.tvmaze.name))();
+
   /// Timestamp "updated" di TVmaze (secondi epoch): serve a capire,
   /// con /updates/shows, se la serie è cambiata dall'ultimo refresh.
   IntColumn get tvmazeUpdated => integer().nullable()();

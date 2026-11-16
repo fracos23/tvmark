@@ -5,47 +5,14 @@ import 'package:http/http.dart' as http;
 
 import '../domain/enums.dart';
 import 'app_database.dart';
+import 'show_models.dart';
+
+// Chi importa il client riceve anche i modelli condivisi.
+export 'show_models.dart';
 
 /// Errore restituito dal client TVmaze.
-class TvmazeException implements Exception {
-  TvmazeException(this.message, {this.statusCode});
-
-  final String message;
-  final int? statusCode;
-
-  /// 429: superato il limite di ~20 chiamate ogni 10 secondi.
-  bool get isRateLimited => statusCode == 429;
-
-  @override
-  String toString() => 'TvmazeException($statusCode): $message';
-}
-
-/// Risultato di ricerca: NON viene salvato nel database finché
-/// l'utente non sceglie di seguire la serie.
-class ShowSearchResult {
-  const ShowSearchResult({
-    required this.id,
-    required this.name,
-    required this.status,
-    this.imageUrl,
-    this.network,
-    this.premieredYear,
-  });
-
-  final int id;
-  final String name;
-  final ShowStatus status;
-  final String? imageUrl;
-  final String? network;
-  final int? premieredYear;
-}
-
-/// Serie + episodi pronti per essere scritti nel database.
-class ShowWithEpisodes {
-  const ShowWithEpisodes({required this.show, required this.episodes});
-
-  final TvShowsCompanion show;
-  final List<EpisodesCompanion> episodes;
+class TvmazeException extends ApiException {
+  TvmazeException(super.message, {super.statusCode});
 }
 
 /// Client minimale per l'API pubblica di TVmaze (https://www.tvmaze.com/api).

@@ -1,5 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../theme.dart';
+
 /// Titoletto colorato che separa i gruppi di una lista.
 class SectionHeader extends StatelessWidget {
   const SectionHeader(this.title, {super.key});
@@ -8,13 +10,16 @@ class SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 6),
       child: Text(
         title,
-        style: theme.textTheme.titleSmall
-            ?.copyWith(color: theme.colorScheme.primary),
+        style: const TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.2,
+          color: AppColors.accent,
+        ),
       ),
     );
   }

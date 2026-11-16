@@ -181,6 +181,23 @@ void main() {
       expect(eps.keys, [1, 2, 3]);
     });
 
+    test('onlySeasons: cancella solo nelle stagioni riscaricate', () async {
+      EpisodesCompanion inSeason(int id, int season) => EpisodesCompanion.insert(
+            id: Value(id),
+            showId: 1,
+            season: season,
+            number: Value(id),
+            name: 'E$id',
+          );
+      await db.syncEpisodes(1, [inSeason(1, 1), inSeason(2, 2), inSeason(3, 2)]);
+
+      // Riscarico solo la stagione 2, dove l'episodio 3 è sparito.
+      await db.syncEpisodes(1, [inSeason(2, 2)], onlySeasons: {2});
+
+      final ids = (await db.watchEpisodesOf(1).first).map((e) => e.id);
+      expect(ids, [1, 2]); // stagione 1 intatta, 3 rimosso
+    });
+
     test('lista vuota dall\'API: non cancella nulla', () async {
       await db.syncEpisodes(1, [apiEp(1, 1, null)]);
       await db.syncEpisodes(1, const []);

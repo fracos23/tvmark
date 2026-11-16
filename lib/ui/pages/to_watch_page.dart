@@ -3,8 +3,10 @@ import 'package:material_ui/material_ui.dart';
 import '../../data/app_database.dart';
 import '../../domain/home_sections.dart';
 import '../formatters.dart';
-import '../widgets/poster.dart';
+import '../theme.dart';
 import '../widgets/section_header.dart';
+import '../widgets/show_card.dart';
+import '../widgets/watch_check.dart';
 
 /// Pagina "Da vedere": un episodio per riga, dal più vecchio,
 /// al massimo 3 per serie (poi "+X altri episodi").
@@ -44,6 +46,8 @@ class ToWatchPage extends StatelessWidget {
     for (final item in data.toWatch) {
       final showId = item.show.id;
       children.add(_EpisodeRow(
+        // Key per episodio: vedi la nota in WatchCheck.
+        key: ValueKey('to-watch-${item.episode.id}'),
         item: item,
         onTap: () => onOpenShow(item.show),
         onMarkWatched: () => onMarkWatched(item.episode),
@@ -63,7 +67,8 @@ class ToWatchPage extends StatelessWidget {
       onRefresh: onRefresh,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        children: [...children, const SizedBox(height: 24)],
+        padding: const EdgeInsets.only(top: 4, bottom: 24),
+        children: children,
       ),
     );
   }
@@ -71,6 +76,7 @@ class ToWatchPage extends StatelessWidget {
 
 class _EpisodeRow extends StatelessWidget {
   const _EpisodeRow({
+    super.key,
     required this.item,
     required this.onTap,
     required this.onMarkWatched,
@@ -83,19 +89,14 @@ class _EpisodeRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ep = item.episode;
-    return ListTile(
-      leading: Poster(url: item.show.imageUrl),
-      title: Text(item.show.name),
-      subtitle: Text(
-        '${episodeCode(ep)} · ${ep.name}\n'
-        'Uscito ${formatAirDate(ep.airstamp!)}',
-      ),
-      isThreeLine: true,
-      trailing: IconButton(
-        icon: const Icon(Icons.check_circle_outline),
-        tooltip: 'Segna come visto',
-        onPressed: onMarkWatched,
-      ),
+    return ShowCard(
+      posterUrl: item.show.imageUrl,
+      title: item.show.name,
+      lines: [
+        CardText.primary('${episodeCode(ep)} · ${ep.name}'),
+        CardText.muted('Uscito ${formatAirDate(ep.airstamp!)}'),
+      ],
+      trailing: WatchCheck(onChecked: onMarkWatched),
       onTap: onTap,
     );
   }
@@ -109,16 +110,20 @@ class _MoreRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      dense: true,
-      // Allineato al testo delle righe sopra (dopo la locandina).
-      contentPadding: const EdgeInsets.only(left: 78, right: 16),
-      title: Text(
-        text,
-        style: TextStyle(color: Theme.of(context).colorScheme.primary),
-      ),
-      trailing: const Icon(Icons.chevron_right),
+    return InkWell(
       onTap: onTap,
+      child: Padding(
+        // Allineato al testo delle card sopra.
+        padding: EdgeInsets.fromLTRB(ShowCard.textInset(64), 4, 16, 10),
+        child: Text(
+          '$text ›',
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: AppColors.accent,
+          ),
+        ),
+      ),
     );
   }
 }

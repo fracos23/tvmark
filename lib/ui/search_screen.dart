@@ -5,8 +5,10 @@ import 'package:material_ui/material_ui.dart';
 import '../data/app_database.dart';
 import '../data/show_repository.dart';
 import '../data/tvmaze_client.dart';
+import '../domain/enums.dart';
 import 'formatters.dart';
 import 'widgets/poster.dart';
+import 'widgets/section_header.dart';
 
 /// Ricerca su TVmaze e aggiunta di una serie alle seguite.
 class SearchScreen extends StatefulWidget {
@@ -28,6 +30,10 @@ class _SearchScreenState extends State<SearchScreen> {
   Timer? _debounce;
   int _requestId = 0;
   List<ShowSearchResult> _results = const [];
+
+  /// Risultati TMDB non già presenti in [_results].
+  List<ShowSearchResult> _extra = const [];
+  bool _extraFailed = false;
   bool _loading = false;
   String? _error;
   final Set<int> _adding = {};
@@ -53,6 +59,8 @@ class _SearchScreenState extends State<SearchScreen> {
     if (query.trim().isEmpty) {
       setState(() {
         _results = const [];
+        _extra = const [];
+        _extraFailed = false;
         _error = null;
         _loading = false;
       });
@@ -64,13 +72,15 @@ class _SearchScreenState extends State<SearchScreen> {
       _error = null;
     });
     try {
-      final results = await widget.repository.search(query);
+      final results = await widget.repository.searchAll(query);
       if (!mounted || id != _requestId) return;
       setState(() {
-        _results = results;
+        _results = results.primary;
+        _extra = results.secondary;
+        _extraFailed = results.secondaryFailed;
         _loading = false;
       });
-    } on TvmazeException catch (e) {
+    } on ApiException catch (e) {
       if (!mounted || id != _requestId) return;
       setState(() {
         _error = e.isRateLimited
@@ -90,7 +100,7 @@ class _SearchScreenState extends State<SearchScreen> {
         content: Text(
             '${show.name} aggiunta. Aprila per segnare a che episodio sei.'),
       ));
-    } on TvmazeException {
+    } on ApiException {
       messenger.showSnackBar(SnackBar(
         content: Text('Non sono riuscito ad aggiungere ${show.name}. Riprova.'),
       ));
@@ -117,12 +127,15 @@ class _SearchScreenState extends State<SearchScreen> {
             _search(text);
           },
         ),
-        bottom: _loading
-            ? const PreferredSize(
-                preferredSize: Size.fromHeight(2),
-                child: LinearProgressIndicator(minHeight: 2),
-              )
-            : null,
+        // La barra c'è sempre (alta 2 px) e cambia solo il contenuto:
+        // se comparisse/sparisse, Flutter ricostruirebbe l'AppBar e il
+        // campo di testo al suo interno, perdendo le lettere digitate.
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(2),
+          child: _loading
+              ? const LinearProgressIndicator(minHeight: 2)
+              : const SizedBox(height: 2),
+        ),
       ),
       body: StreamBuilder<List<TvShow>>(
         stream: _followed,
@@ -136,7 +149,11 @@ class _SearchScreenState extends State<SearchScreen> {
               Padding(
                 padding: const EdgeInsets.all(8),
                 child: Text(
-                  'Dati forniti da TVmaze.com',
+                  widget.repository.tmdbEnabled
+                      ? 'Dati: TVmaze.com e TMDB. Questo prodotto usa l\'API '
+                          'TMDB ma non è approvato né certificato da TMDB.'
+                      : 'Dati forniti da TVmaze.com',
+                  textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),
@@ -156,7 +173,7 @@ class _SearchScreenState extends State<SearchScreen> {
         ),
       );
     }
-    if (_results.isEmpty) {
+    if (_results.isEmpty && _extra.isEmpty) {
       final hasQuery = _controller.text.trim().isNotEmpty;
       return Center(
         child: Text(hasQuery && !_loading
@@ -165,41 +182,57 @@ class _SearchScreenState extends State<SearchScreen> {
       );
     }
 
-    return ListView.separated(
-      itemCount: _results.length,
-      separatorBuilder: (_, _) => const Divider(height: 1),
-      itemBuilder: (context, i) {
-        final show = _results[i];
-        final year = show.premieredYear;
-        final details = [
-          if (show.network != null) show.network!,
-          show.status.label,
-        ].join(' · ');
+    return ListView(
+      children: [
+        for (final show in _results) _resultTile(show, followedIds),
+        if (_extra.isNotEmpty) ...[
+          const SectionHeader('Altri risultati da TMDB'),
+          for (final show in _extra) _resultTile(show, followedIds),
+        ],
+        if (_extraFailed)
+          const Padding(
+            padding: EdgeInsets.all(16),
+            child: Text(
+              'Ricerca su TMDB non riuscita: mostro solo i risultati TVmaze.',
+              textAlign: TextAlign.center,
+            ),
+          ),
+      ],
+    );
+  }
 
-        final Widget trailing;
-        if (followedIds.contains(show.id)) {
-          trailing = const Icon(Icons.check, color: Colors.green);
-        } else if (_adding.contains(show.id)) {
-          trailing = const SizedBox(
-            width: 24,
-            height: 24,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          );
-        } else {
-          trailing = IconButton(
-            icon: const Icon(Icons.add_circle_outline),
-            tooltip: 'Segui',
-            onPressed: () => _follow(show),
-          );
-        }
+  Widget _resultTile(ShowSearchResult show, Set<int> followedIds) {
+    final year = show.premieredYear;
+    final details = show.source == ShowSource.tmdb
+        // La ricerca TMDB non dà rete e stato: mostriamo paese e fonte.
+        ? [if (show.originCountry != null) show.originCountry!, 'TMDB']
+            .join(' · ')
+        : [if (show.network != null) show.network!, show.status.label]
+            .join(' · ');
 
-        return ListTile(
-          leading: Poster(url: show.imageUrl, width: 40),
-          title: Text(year == null ? show.name : '${show.name} ($year)'),
-          subtitle: Text(details),
-          trailing: trailing,
-        );
-      },
+    final Widget trailing;
+    if (followedIds.contains(show.id)) {
+      trailing =
+          Icon(Icons.check, color: Theme.of(context).colorScheme.primary);
+    } else if (_adding.contains(show.id)) {
+      trailing = const SizedBox(
+        width: 24,
+        height: 24,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      );
+    } else {
+      trailing = IconButton(
+        icon: const Icon(Icons.add_circle_outline),
+        tooltip: 'Segui',
+        onPressed: () => _follow(show),
+      );
+    }
+
+    return ListTile(
+      leading: Poster(url: show.imageUrl, width: 40, radius: 6),
+      title: Text(year == null ? show.name : '${show.name} ($year)'),
+      subtitle: Text(details),
+      trailing: trailing,
     );
   }
 }

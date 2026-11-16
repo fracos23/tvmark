@@ -7,7 +7,13 @@ final now = DateTime(2026, 11, 16, 12);
 const day = Duration(days: 1);
 
 TvShow show(int id, String name, ShowStatus status) =>
-    TvShow(id: id, name: name, status: status, addedAt: now);
+    TvShow(
+      id: id,
+      name: name,
+      status: status,
+      source: ShowSource.tvmaze,
+      addedAt: now,
+    );
 
 ShowEpisode ep(
   TvShow s,

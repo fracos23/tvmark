@@ -56,7 +56,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) setState(() => _refreshing = true);
     try {
       await _repo.refresh(force: force);
-    } on TvmazeException {
+    } on ApiException {
       // Automatico: silenzioso (es. offline). Manuale: avvisiamo.
       if (force && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -156,12 +156,15 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: _openSearch,
           ),
         ],
-        bottom: _refreshing
-            ? const PreferredSize(
-                preferredSize: Size.fromHeight(2),
-                child: LinearProgressIndicator(minHeight: 2),
-              )
-            : null,
+        // La barra c'è sempre (alta 2 px) e cambia solo il contenuto:
+        // se comparisse/sparisse, Flutter ricostruirebbe l'AppBar e il
+        // campo di testo al suo interno, perdendo le lettere digitate.
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(2),
+          child: _refreshing
+              ? const LinearProgressIndicator(minHeight: 2)
+              : const SizedBox(height: 2),
+        ),
       ),
       body: body,
       bottomNavigationBar: NavigationBar(

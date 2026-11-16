@@ -3,8 +3,9 @@ import 'package:material_ui/material_ui.dart';
 import '../../data/app_database.dart';
 import '../../domain/home_sections.dart';
 import '../formatters.dart';
-import '../widgets/poster.dart';
+import '../theme.dart';
 import '../widgets/section_header.dart';
+import '../widgets/show_card.dart';
 
 /// Pagina "In arrivo": episodi dei prossimi 7 giorni, raggruppati per giorno
 /// come un calendario. Ogni serie con altri episodi in programma mostra
@@ -40,7 +41,6 @@ class _UpcomingPageState extends State<UpcomingPage> {
     final lastIndexByShow = <int, int>{
       for (var i = 0; i < items.length; i++) items[i].show.id: i,
     };
-    final primary = Theme.of(context).colorScheme.primary;
 
     final children = <Widget>[];
     DateTime? currentDay;
@@ -57,19 +57,22 @@ class _UpcomingPageState extends State<UpcomingPage> {
       final later = widget.data.laterCountByShow[item.show.id] ?? 0;
       final showHint = laterHints && later > 0 && lastIndexByShow[item.show.id] == i;
 
-      children.add(ListTile(
-        leading: Poster(url: item.show.imageUrl),
-        title: Text(item.show.name),
-        subtitle: Text.rich(TextSpan(children: [
-          TextSpan(text: '${episodeCode(item.episode)} · ${item.episode.name}'),
-          if (showHint)
-            TextSpan(
-              text: '\n+$later in programma',
-              style: TextStyle(color: primary),
-            ),
-        ])),
-        isThreeLine: showHint,
-        trailing: Text(formatTime(air)),
+      children.add(ShowCard(
+        posterUrl: item.show.imageUrl,
+        posterWidth: 52,
+        title: item.show.name,
+        lines: [
+          CardText.primary(
+              '${episodeCode(item.episode)} · ${item.episode.name}'),
+          if (showHint) CardText.accent('+$later in programma'),
+        ],
+        trailing: Text(
+          formatTime(air),
+          style: const TextStyle(
+            fontWeight: FontWeight.w600,
+            color: AppColors.textSecondary,
+          ),
+        ),
         onTap: () => widget.onOpenShow(item.show),
       ));
     }

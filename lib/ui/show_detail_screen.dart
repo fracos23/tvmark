@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import '../data/app_database.dart';
 import '../data/show_repository.dart';
 import '../domain/enums.dart';
+import 'formatters.dart';
 import 'widgets/episode_tile.dart';
 
 /// Dettaglio di una serie: stagioni (dalla prima, chiuse) ed episodi.
@@ -56,11 +57,75 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
     if (mounted) Navigator.pop(context);
   }
 
-  void _toggleWatched(Episode ep) {
-    final next = ep.watchStatus == WatchStatus.watched
-        ? WatchStatus.toWatch
-        : WatchStatus.watched;
-    _repo.markStatus(ep.id, next);
+  /// True se [e] viene prima di [target] nell'ordine della serie.
+  /// Stessa regola di markWatchedUpTo: nella stessa stagione contano solo
+  /// gli episodi con numero (gli speciali senza numero restano fuori).
+  static bool _isBefore(Episode e, Episode target) {
+    if (e.season != target.season) return e.season < target.season;
+    final n = e.number;
+    final t = target.number;
+    return n != null && t != null && n < t;
+  }
+
+  /// Tap su un episodio uscito:
+  /// - già visto -> torna "da vedere";
+  /// - nessun precedente da vedere -> segnato visto subito;
+  /// - altrimenti chiede se segnare anche i precedenti.
+  void _onTapEpisode(Episode ep, List<Episode> all) {
+    if (ep.watchStatus == WatchStatus.watched) {
+      _repo.markStatus(ep.id, WatchStatus.toWatch);
+      return;
+    }
+    final earlier = all
+        .where((e) => e.watchStatus == WatchStatus.toWatch && _isBefore(e, ep))
+        .length;
+    if (earlier == 0) {
+      _repo.markStatus(ep.id, WatchStatus.watched);
+    } else {
+      _askMarkPrevious(ep, earlier);
+    }
+  }
+
+  Future<void> _askMarkPrevious(Episode ep, int earlier) {
+    return showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text(
+                earlier == 1
+                    ? 'C\'è 1 episodio precedente non visto'
+                    : 'Ci sono $earlier episodi precedenti non visti',
+                style: Theme.of(ctx).textTheme.titleMedium,
+              ),
+              subtitle: Text('Stai segnando ${episodeCode(ep)} · ${ep.name}'),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.done_all),
+              title: const Text('Segna visti fino a qui'),
+              subtitle: Text(earlier == 1
+                  ? 'Questo e il precedente'
+                  : 'Questo e i $earlier precedenti'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _repo.markWatchedUpTo(ep);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.check_circle_outline),
+              title: const Text('Solo questo episodio'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _repo.markStatus(ep.id, WatchStatus.watched);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _showEpisodeActions(Episode ep) {
@@ -158,7 +223,7 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
                           e.airstamp != null && e.airstamp!.isAfter(now)),
                   onMarkSeasonWatched: () =>
                       _repo.markSeasonWatched(widget.show.id, season),
-                  onTapEpisode: _toggleWatched,
+                  onTapEpisode: (ep) => _onTapEpisode(ep, episodes),
                   onLongPressEpisode: _showEpisodeActions,
                 ),
             ],

@@ -3,8 +3,8 @@ import 'package:material_ui/material_ui.dart';
 import '../../data/app_database.dart';
 import '../../domain/home_sections.dart';
 import '../formatters.dart';
-import '../widgets/poster.dart';
 import '../widgets/section_header.dart';
+import '../widgets/show_card.dart';
 
 /// Pagina "Le mie serie": tutte le serie seguite, divise per stato.
 /// "NBC · Prossimo: S14E08, gio 20 nov".
@@ -35,16 +35,12 @@ class MyShowsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     Widget tile(TvShow show, String subtitle) {
       final toWatch = data.toWatchCountByShow[show.id] ?? 0;
-      return ListTile(
-        leading: Poster(url: show.imageUrl),
-        title: Text(show.name),
-        subtitle: Text(subtitle),
-        trailing: toWatch > 0
-            ? Badge.count(
-                count: toWatch,
-                backgroundColor: Theme.of(context).colorScheme.primary,
-              )
-            : null,
+      return ShowCard(
+        posterUrl: show.imageUrl,
+        posterWidth: 52,
+        title: show.name,
+        lines: [CardText.muted(subtitle)],
+        trailing: toWatch > 0 ? Badge.count(count: toWatch) : null,
         onTap: () => onOpenShow(show),
       );
     }
