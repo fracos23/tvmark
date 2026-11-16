@@ -7,6 +7,18 @@ import '../widgets/poster.dart';
 import '../widgets/section_header.dart';
 
 /// Pagina "Le mie serie": tutte le serie seguite, divise per stato.
+/// "NBC · Prossimo: S14E08, gio 20 nov".
+String _nextLabel(TvShow show, Episode? next) {
+  final parts = [
+    if (show.network != null) show.network!,
+    if (next != null)
+      'Prossimo: ${episodeCode(next)}, ${formatNextDate(next.airstamp!)}'
+    else
+      show.status.label,
+  ];
+  return parts.join(' · ');
+}
+
 class MyShowsPage extends StatelessWidget {
   const MyShowsPage({
     super.key,
@@ -46,7 +58,8 @@ class MyShowsPage extends StatelessWidget {
         children: [
           if (data.running.isNotEmpty) ...[
             SectionHeader('In corso (${data.running.length})'),
-            for (final s in data.running) tile(s, network(s, s.status.label)),
+            for (final s in data.running)
+              tile(s, _nextLabel(s, data.nextByShow[s.id])),
           ],
           if (data.paused.isNotEmpty) ...[
             SectionHeader('In pausa (${data.paused.length})'),

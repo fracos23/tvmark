@@ -13,10 +13,14 @@ class ShowDetailScreen extends StatefulWidget {
     super.key,
     required this.repository,
     required this.show,
+    this.expandUpcoming = false,
   });
 
   final ShowRepository repository;
   final TvShow show;
+
+  /// Se true, all'apertura sono già espanse le stagioni con episodi futuri.
+  final bool expandUpcoming;
 
   @override
   State<ShowDetailScreen> createState() => _ShowDetailScreenState();
@@ -139,6 +143,7 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
             bySeason.putIfAbsent(ep.season, () => []).add(ep);
           }
           final seasons = bySeason.keys.toList()..sort();
+          final now = DateTime.now();
 
           return ListView(
             children: [
@@ -148,6 +153,9 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
                   key: PageStorageKey('season-$season'),
                   season: season,
                   episodes: bySeason[season]!,
+                  initiallyExpanded: widget.expandUpcoming &&
+                      bySeason[season]!.any((e) =>
+                          e.airstamp != null && e.airstamp!.isAfter(now)),
                   onMarkSeasonWatched: () =>
                       _repo.markSeasonWatched(widget.show.id, season),
                   onTapEpisode: _toggleWatched,
@@ -166,6 +174,7 @@ class _SeasonSection extends StatelessWidget {
     super.key,
     required this.season,
     required this.episodes,
+    required this.initiallyExpanded,
     required this.onMarkSeasonWatched,
     required this.onTapEpisode,
     required this.onLongPressEpisode,
@@ -173,6 +182,7 @@ class _SeasonSection extends StatelessWidget {
 
   final int season;
   final List<Episode> episodes;
+  final bool initiallyExpanded;
   final VoidCallback onMarkSeasonWatched;
   final void Function(Episode) onTapEpisode;
   final void Function(Episode) onLongPressEpisode;
@@ -182,8 +192,9 @@ class _SeasonSection extends StatelessWidget {
     final watched =
         episodes.where((e) => e.watchStatus == WatchStatus.watched).length;
 
-    // Chiusa all'apertura; si apre al tap.
+    // Chiusa all'apertura (salvo arrivo da "In arrivo"); si apre al tap.
     return ExpansionTile(
+      initiallyExpanded: initiallyExpanded,
       title: Text('Stagione $season'),
       subtitle: Text('$watched/${episodes.length} visti'),
       trailing: PopupMenuButton<void>(

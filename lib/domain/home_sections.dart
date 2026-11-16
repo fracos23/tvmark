@@ -16,6 +16,9 @@ class HomeData {
     required this.hiddenByShow,
     required this.toWatchCountByShow,
     required this.upcoming,
+    required this.upcomingLater,
+    required this.laterCountByShow,
+    required this.nextByShow,
     required this.running,
     required this.paused,
     required this.ended,
@@ -30,8 +33,18 @@ class HomeData {
   /// Per serie: totale episodi usciti da vedere (per i badge).
   final Map<int, int> toWatchCountByShow;
 
-  /// Tutti gli episodi futuri con data, dal più vicino.
+  /// Episodi futuri con data entro la finestra (default 7 giorni),
+  /// dal più vicino.
   final List<ShowEpisode> upcoming;
+
+  /// Episodi futuri con data oltre la finestra, dal più vicino.
+  final List<ShowEpisode> upcomingLater;
+
+  /// Per serie: quanti episodi in programma oltre la finestra.
+  final Map<int, int> laterCountByShow;
+
+  /// Per serie: il prossimo episodio con data (anche oltre la finestra).
+  final Map<int, Episode> nextByShow;
 
   /// Serie non concluse con almeno un episodio futuro con data.
   final List<TvShow> running;
@@ -67,10 +80,13 @@ HomeData buildHomeData({
   required List<ShowEpisode> episodes,
   required DateTime now,
   int maxPerShow = 3,
+  Duration upcomingWindow = const Duration(days: 7),
 }) {
+  final upcomingLimit = now.add(upcomingWindow);
   final showsById = {for (final s in shows) s.id: s};
   final airedByShow = <int, List<Episode>>{};
   final upcoming = <ShowEpisode>[];
+  final upcomingLater = <ShowEpisode>[];
   final showsWithUpcoming = <int>{};
 
   for (final item in episodes) {
@@ -83,10 +99,12 @@ HomeData buildHomeData({
         airedByShow.putIfAbsent(show.id, () => []).add(item.episode);
       }
     } else {
+      // Conta per "In corso" anche se è oltre la finestra (es. a gennaio).
       showsWithUpcoming.add(show.id);
       // Un episodio futuro segnato "saltato" non interessa nel calendario.
       if (item.episode.watchStatus != WatchStatus.skipped) {
-        upcoming.add(ShowEpisode(show, item.episode));
+        final target = air.isAfter(upcomingLimit) ? upcomingLater : upcoming;
+        target.add(ShowEpisode(show, item.episode));
       }
     }
   }
@@ -103,12 +121,27 @@ HomeData buildHomeData({
   }
   toWatch.sort(_compareShowEpisodes);
   upcoming.sort(_compareShowEpisodes);
+  upcomingLater.sort(_compareShowEpisodes);
+
+  final laterCount = <int, int>{};
+  for (final item in upcomingLater) {
+    laterCount.update(item.show.id, (n) => n + 1, ifAbsent: () => 1);
+  }
+  // Liste già ordinate e "upcoming" viene prima di "later":
+  // il primo episodio incontrato per ogni serie è il più vicino.
+  final next = <int, Episode>{};
+  for (final item in [...upcoming, ...upcomingLater]) {
+    next.putIfAbsent(item.show.id, () => item.episode);
+  }
 
   return HomeData(
     toWatch: toWatch,
     hiddenByShow: hidden,
     toWatchCountByShow: counts,
     upcoming: upcoming,
+    upcomingLater: upcomingLater,
+    laterCountByShow: laterCount,
+    nextByShow: next,
     running: [
       for (final s in shows)
         if (s.status != ShowStatus.ended && showsWithUpcoming.contains(s.id)) s,

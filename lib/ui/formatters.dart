@@ -36,6 +36,17 @@ String formatDayHeader(DateTime airstamp, {DateTime? now}) {
   return text[0].toUpperCase() + text.substring(1);
 }
 
+final _shortDateFormat = DateFormat('EEE d MMM', 'it_IT');
+
+/// Data breve per il prossimo episodio: "oggi", "domani", "gio 20 nov".
+String formatNextDate(DateTime airstamp, {DateTime? now}) {
+  final local = airstamp.toLocal();
+  final days = _daysFromToday(local, now ?? DateTime.now());
+  if (days == 0) return 'oggi, ${_timeFormat.format(local)}';
+  if (days == 1) return 'domani, ${_timeFormat.format(local)}';
+  return _shortDateFormat.format(local);
+}
+
 /// "S14E08", oppure "S14 Speciale" per gli episodi senza numero.
 String episodeCode(Episode ep) {
   final season = 'S${ep.season.toString().padLeft(2, '0')}';

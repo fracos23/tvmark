@@ -76,10 +76,14 @@ class _HomeScreenState extends State<HomeScreen> {
         MaterialPageRoute(builder: (_) => SearchScreen(repository: _repo)),
       );
 
-  void _openShow(TvShow show) => Navigator.push(
+  void _openShow(TvShow show, {bool expandUpcoming = false}) => Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => ShowDetailScreen(repository: _repo, show: show),
+          builder: (_) => ShowDetailScreen(
+            repository: _repo,
+            show: show,
+            expandUpcoming: expandUpcoming,
+          ),
         ),
       );
 
@@ -128,7 +132,8 @@ class _HomeScreenState extends State<HomeScreen> {
           UpcomingPage(
             data: data,
             onRefresh: _forceRefresh,
-            onOpenShow: _openShow,
+            // Da "In arrivo" apriamo la serie con gli episodi futuri in vista.
+            onOpenShow: (show) => _openShow(show, expandUpcoming: true),
           ),
           MyShowsPage(
             data: data,

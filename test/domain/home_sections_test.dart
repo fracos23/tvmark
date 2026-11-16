@@ -77,13 +77,39 @@ void main() {
     expect(data.totalToWatch, 7);
   });
 
-  test('In arrivo: tutti gli episodi futuri, dal più vicino, senza saltati',
+  test('In arrivo: solo i prossimi 7 giorni, dal più vicino, senza saltati',
       () {
+    // Fire E07 (tra 14 giorni) è fuori dalla finestra.
     expect(data.upcoming.map((e) => (e.show.name, e.episode.number)), [
       ('Chicago PD', 2),
       ('Chicago Fire', 6),
+    ]);
+  });
+
+  test('In arrivo, più avanti: gli episodi oltre la finestra, senza saltati',
+      () {
+    // PD E03 (tra 9 giorni) è oltre la finestra ma è "saltato".
+    expect(data.upcomingLater.map((e) => (e.show.name, e.episode.number)), [
       ('Chicago Fire', 7),
     ]);
+  });
+
+  test('una serie con episodi solo oltre la finestra resta "in corso"', () {
+    final d = buildHomeData(
+      shows: [fire],
+      now: now,
+      episodes: [ep(fire, 1, season: 1, number: 1, fromNow: day * 50)],
+    );
+    expect(d.upcoming, isEmpty);
+    expect(d.upcomingLater, hasLength(1));
+    expect(d.running.map((s) => s.name), ['Chicago Fire']);
+    expect(d.paused, isEmpty);
+  });
+
+  test('per serie: episodi oltre la finestra e prossimo episodio', () {
+    expect(data.laterCountByShow, {1: 1}); // Fire E07
+    expect(data.nextByShow.map((id, e) => MapEntry(id, e.number)),
+        {1: 6, 2: 2});
   });
 
   test('Le mie serie: in corso, in pausa, concluse', () {
