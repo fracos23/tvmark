@@ -1,0 +1,9 @@
+# Configurazione per generare le icone dell'app da un'unica immagine.
+# Comando: dart run flutter_launcher_icons
+flutter_launcher_icons:
+  image_path: "assets/icon/icon.png"
+  ios: true
+  # Il progetto è solo iOS: niente icone Android.
+  android: false
+  # iOS rifiuta icone con trasparenza: per sicurezza la rimuove.
+  remove_alpha_ios: true

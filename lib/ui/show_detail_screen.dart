@@ -1,10 +1,14 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:material_ui/material_ui.dart';
 
 import '../data/app_database.dart';
 import '../data/show_repository.dart';
 import '../domain/enums.dart';
 import 'formatters.dart';
+import 'theme.dart';
 import 'widgets/episode_tile.dart';
+import 'widgets/poster.dart';
 
 /// Dettaglio di una serie: stagioni (dalla prima, chiuse) ed episodi.
 /// Tap su un episodio uscito: visto <-> da vedere.
@@ -181,55 +185,254 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.show.name),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.delete_outline),
-            tooltip: 'Smetti di seguire',
-            onPressed: _confirmUnfollow,
-          ),
-        ],
-      ),
       body: StreamBuilder<List<Episode>>(
         stream: _episodes,
         builder: (context, snapshot) {
           final episodes = snapshot.data;
-          if (episodes == null) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (episodes.isEmpty) {
-            return const Center(child: Text('Nessun episodio disponibile'));
-          }
+          final list = episodes ?? const <Episode>[];
 
           // Raggruppa per stagione, dalla prima all'ultima.
           final bySeason = <int, List<Episode>>{};
-          for (final ep in episodes) {
+          for (final ep in list) {
             bySeason.putIfAbsent(ep.season, () => []).add(ep);
           }
           final seasons = bySeason.keys.toList()..sort();
           final now = DateTime.now();
 
-          return ListView(
-            children: [
-              for (final season in seasons)
-                _SeasonSection(
-                  // La key mantiene aperto/chiuso quando i dati cambiano.
-                  key: PageStorageKey('season-$season'),
-                  season: season,
-                  episodes: bySeason[season]!,
-                  initiallyExpanded: widget.expandUpcoming &&
-                      bySeason[season]!.any((e) =>
-                          e.airstamp != null && e.airstamp!.isAfter(now)),
-                  onMarkSeasonWatched: () =>
-                      _repo.markSeasonWatched(widget.show.id, season),
-                  onTapEpisode: (ep) => _onTapEpisode(ep, episodes),
-                  onLongPressEpisode: _showEpisodeActions,
-                ),
+          final aired = list.where((e) => isEpisodeAired(e, now)).length;
+          final watched =
+              list.where((e) => e.watchStatus == WatchStatus.watched).length;
+
+          return CustomScrollView(
+            slivers: [
+              _ShowHeader(
+                show: widget.show,
+                watched: watched,
+                aired: aired,
+                onUnfollow: _confirmUnfollow,
+              ),
+              if (episodes == null)
+                const SliverFillRemaining(
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (episodes.isEmpty)
+                const SliverFillRemaining(
+                  child: Center(child: Text('Nessun episodio disponibile')),
+                )
+              else
+                SliverList.list(children: [
+                  const SizedBox(height: 8),
+                  for (final season in seasons)
+                    _SeasonSection(
+                      // La key mantiene aperto/chiuso quando i dati cambiano.
+                      key: PageStorageKey('season-$season'),
+                      season: season,
+                      episodes: bySeason[season]!,
+                      initiallyExpanded: widget.expandUpcoming &&
+                          bySeason[season]!.any((e) =>
+                              e.airstamp != null && e.airstamp!.isAfter(now)),
+                      onMarkSeasonWatched: () =>
+                          _repo.markSeasonWatched(widget.show.id, season),
+                      onTapEpisode: (ep) => _onTapEpisode(ep, episodes),
+                      onLongPressEpisode: _showEpisodeActions,
+                    ),
+                  const SizedBox(height: 32),
+                ]),
             ],
           );
         },
       ),
+    );
+  }
+}
+
+/// Intestazione che si chiude scorrendo: da espansa mostra locandina,
+/// nome, rete/stato e avanzamento; da chiusa solo il nome nella barra.
+class _ShowHeader extends StatelessWidget {
+  const _ShowHeader({
+    required this.show,
+    required this.watched,
+    required this.aired,
+    required this.onUnfollow,
+  });
+
+  final TvShow show;
+  final int watched;
+  final int aired;
+  final VoidCallback onUnfollow;
+
+  static const _expandedHeight = 290.0;
+  static const _toolbarHeight = 56.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final topPadding = MediaQuery.paddingOf(context).top;
+    final minHeight = _toolbarHeight + topPadding;
+    final maxHeight = _expandedHeight + topPadding;
+
+    return SliverAppBar(
+      pinned: true,
+      expandedHeight: _expandedHeight,
+      toolbarHeight: _toolbarHeight,
+      backgroundColor: AppColors.background,
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.delete_outline),
+          tooltip: 'Smetti di seguire',
+          onPressed: onUnfollow,
+        ),
+      ],
+      flexibleSpace: LayoutBuilder(
+        builder: (context, constraints) {
+          // t = 1 intestazione aperta, 0 chiusa.
+          final t = ((constraints.maxHeight - minHeight) /
+                  (maxHeight - minHeight))
+              .clamp(0.0, 1.0);
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              Opacity(
+                opacity: t,
+                child: _HeaderContent(
+                  show: show,
+                  watched: watched,
+                  aired: aired,
+                ),
+              ),
+              // Nome nella barra, visibile solo quando è chiusa.
+              Positioned(
+                left: 56,
+                right: 56,
+                bottom: 0,
+                height: _toolbarHeight,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Opacity(
+                    opacity: (1 - t * 2).clamp(0.0, 1.0),
+                    child: Text(
+                      show.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _HeaderContent extends StatelessWidget {
+  const _HeaderContent({
+    required this.show,
+    required this.watched,
+    required this.aired,
+  });
+
+  final TvShow show;
+  final int watched;
+  final int aired;
+
+  @override
+  Widget build(BuildContext context) {
+    final url = show.imageUrl;
+    final progress = aired == 0 ? 0.0 : (watched / aired).clamp(0.0, 1.0);
+    final meta = [
+      if (show.network != null) show.network!,
+      show.status.label,
+    ].join(' · ');
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // Sfondo: la locandina ingrandita e sfocata, molto scurita.
+        if (url != null)
+          ImageFiltered(
+            imageFilter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+            child: Opacity(
+              opacity: 0.45,
+              child: Image.network(
+                url,
+                fit: BoxFit.cover,
+                cacheWidth: 200,
+                errorBuilder: (_, _, _) => const SizedBox.shrink(),
+              ),
+            ),
+          ),
+        // Sfumatura verso il nero, così si fonde con la lista sotto.
+        const DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0x660E0E10), AppColors.background],
+              stops: [0.0, 0.95],
+            ),
+          ),
+        ),
+        Positioned(
+          left: 20,
+          right: 20,
+          bottom: 16,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Poster(url: url, width: 104, radius: 14),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      show.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.3,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      meta,
+                      style: const TextStyle(
+                          fontSize: 13, color: AppColors.textMuted),
+                    ),
+                    const SizedBox(height: 12),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: progress,
+                        minHeight: 6,
+                        backgroundColor: AppColors.raised,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      aired == 0
+                          ? 'Nessun episodio ancora uscito'
+                          : '$watched di $aired episodi usciti visti',
+                      style: const TextStyle(
+                          fontSize: 12, color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -256,29 +459,48 @@ class _SeasonSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final watched =
         episodes.where((e) => e.watchStatus == WatchStatus.watched).length;
+    final complete = watched == episodes.length;
 
-    // Chiusa all'apertura (salvo arrivo da "In arrivo"); si apre al tap.
-    return ExpansionTile(
-      initiallyExpanded: initiallyExpanded,
-      title: Text('Stagione $season'),
-      subtitle: Text('$watched/${episodes.length} visti'),
-      trailing: PopupMenuButton<void>(
-        itemBuilder: (_) => [
-          PopupMenuItem(
-            onTap: onMarkSeasonWatched,
-            child: const Text('Segna stagione come vista'),
+    // Card come nel resto dell'app. Chiusa all'apertura (salvo arrivo
+    // da "In arrivo"); si apre al tap.
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+      child: Material(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(18),
+        clipBehavior: Clip.antiAlias,
+        child: ExpansionTile(
+          initiallyExpanded: initiallyExpanded,
+          title: Text(
+            'Stagione $season',
+            style: const TextStyle(fontWeight: FontWeight.w700),
           ),
-        ],
+          subtitle: Text(
+            complete ? 'Completata' : '$watched/${episodes.length} visti',
+            style: TextStyle(
+              fontSize: 13,
+              color: complete ? AppColors.accent : AppColors.textMuted,
+            ),
+          ),
+          trailing: PopupMenuButton<void>(
+            itemBuilder: (_) => [
+              PopupMenuItem(
+                onTap: onMarkSeasonWatched,
+                child: const Text('Segna stagione come vista'),
+              ),
+            ],
+          ),
+          children: [
+            for (final ep in episodes)
+              EpisodeTile(
+                episode: ep,
+                // Il tap rapido vale solo per gli episodi già usciti.
+                onTap: isEpisodeAired(ep) ? () => onTapEpisode(ep) : null,
+                onLongPress: () => onLongPressEpisode(ep),
+              ),
+          ],
+        ),
       ),
-      children: [
-        for (final ep in episodes)
-          EpisodeTile(
-            episode: ep,
-            // Il tap rapido vale solo per gli episodi già usciti.
-            onTap: isEpisodeAired(ep) ? () => onTapEpisode(ep) : null,
-            onLongPress: () => onLongPressEpisode(ep),
-          ),
-      ],
     );
   }
 }
